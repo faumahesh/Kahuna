@@ -63,6 +63,12 @@ void MavESP8266GCS::begin(MavESP8266Bridge *forwardTo, IPAddress gcsIP)
 }
 
 //---------------------------------------------------------------------------------
+void MavESP8266GCS::stopUdpForUpdate()
+{
+    _udp.stop();
+}
+
+//---------------------------------------------------------------------------------
 //-- Read MavLink message from GCS
 void MavESP8266GCS::readMessage()
 {
@@ -118,9 +124,11 @@ bool MavESP8266GCS::_readMessage()
                         {
                             _ledManager.setLED(_ledManager.gcs, _ledManager.on);
                             //-- We no longer need DHCP
-                            if (getWorld()->getParameters()->getWifiMode() == WIFI_MODE_AP)
+                            if (getWorld()->getParameters()->getWifiMode() == KAHUNA_PARAM_WIFI_AP)
                             {
+#if defined(ARDUINO_ARCH_ESP8266)
                                 wifi_softap_dhcps_stop();
+#endif
                             }
                             _heard_from = true;
                             _system_id = _message.sysid;
@@ -168,9 +176,11 @@ bool MavESP8266GCS::_readMessage()
         {
             _ledManager.setLED(_ledManager.gcs, _ledManager.blink);
             //-- Restart DHCP and start broadcasting again
-            if (getWorld()->getParameters()->getWifiMode() == WIFI_MODE_AP)
+            if (getWorld()->getParameters()->getWifiMode() == KAHUNA_PARAM_WIFI_AP)
             {
+#if defined(ARDUINO_ARCH_ESP8266)
                 wifi_softap_dhcps_start();
+#endif
             }
             _heard_from = false;
             _ip[3] = 255;
@@ -266,10 +276,21 @@ void MavESP8266GCS::_sendRadioStatus()
     uint8_t lostVehicleMessages = 100;
     uint8_t lostGcsMessages = 100;
 
+#if defined(ARDUINO_ARCH_ESP8266)
     if (wifi_get_opmode() == STATION_MODE)
     {
         rssi = (uint8_t)wifi_station_get_rssi();
     }
+#else
+    if (WiFi.getMode() == WIFI_MODE_STA && WiFi.status() == WL_CONNECTED)
+    {
+        int r = WiFi.RSSI();
+        if (r < 0)
+        {
+            rssi = (uint8_t)constrain(-r, 0, 255);
+        }
+    }
+#endif
 
     if (st->packets_received > 0)
     {

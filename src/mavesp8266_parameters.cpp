@@ -231,14 +231,21 @@ uint32_t MavESP8266Parameters::paramHashCheck()
 //-- Saves all parameters to EEPROM
 void MavESP8266Parameters::saveAllToEeprom()
 {
-    //-- Init flash space
+    //-- Init flash space (ESP8266 EEPROM exposes getDataPtr; ESP32 uses byte writes)
+#if defined(ARDUINO_ARCH_ESP8266)
     uint8_t *ptr = EEPROM.getDataPtr();
     memset(ptr, 0, EEPROM_SPACE);
+#else
+    for (uint32_t i = 0; i < EEPROM_SPACE; i++)
+    {
+        EEPROM.write(i, 0);
+    }
+#endif
     //-- Write all paramaters to flash
     uint32_t address = 0;
     for (int i = 0; i < ID_COUNT; i++)
     {
-        ptr = (uint8_t *)mavParameters[i].value;
+        uint8_t *ptr = (uint8_t *)mavParameters[i].value;
 #ifdef DEBUG
         Serial1.print("Saving to EEPROM: ");
         Serial1.print(mavParameters[i].id);

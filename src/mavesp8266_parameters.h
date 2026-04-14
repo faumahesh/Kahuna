@@ -38,12 +38,12 @@
 #ifndef MAVESP8266_PARAMETERS_H
 #define MAVESP8266_PARAMETERS_H
 
-#define WIFI_MODE_AP 0
-#define WIFI_MODE_STA 1
+/* Stored in parameters; must not collide with ESP32 WiFi.h wifi_mode_t / WIFI_MODE_AP macros */
+#define KAHUNA_PARAM_WIFI_AP 0
+#define KAHUNA_PARAM_WIFI_STA 1
 
 //-- Constants
-#define DEFAULT_WIFI_MODE WIFI_MODE_AP
-#define DEFAULT_UART_SPEED 57600
+#define DEFAULT_WIFI_MODE KAHUNA_PARAM_WIFI_AP
 #define DEFAULT_WIFI_CHANNEL 11
 #define DEFAULT_UDP_HPORT 14550
 #define DEFAULT_UDP_CPORT 14555

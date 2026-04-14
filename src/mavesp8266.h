@@ -38,18 +38,22 @@
 #ifndef MAVESP8266_H
 #define MAVESP8266_H
 
+#if defined(ARDUINO_ARCH_ESP8266)
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <WiFiUdp.h>
+extern "C" {
+#include "user_interface.h"
+}
+#elif defined(ARDUINO_ARCH_ESP32)
+#include <WiFi.h>
+#include <WiFiUdp.h>
+#else
+#error "Build requires Arduino ESP8266 or ESP32 core"
+#endif
 
 #undef F
 #include <ardupilotmega/mavlink.h>
-
-extern "C"
-{
-// Espressif SDK
-#include "user_interface.h"
-}
 
 class MavESP8266Parameters;
 class MavESP8266Component;

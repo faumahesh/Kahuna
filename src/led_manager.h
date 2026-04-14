@@ -1,4 +1,5 @@
 #include "mavesp8266.h"
+#include "board_pins.h"
 
 #ifndef LED_MANAGER_H
 #define LED_MANAGER_H
@@ -8,9 +9,9 @@ class LEDManager
 public:
     enum Led
     {
-        wifi = 4,
-        air = 12,
-        gcs = 5
+        wifi = KAHUNA_PIN_LED_WIFI,
+        air = KAHUNA_PIN_LED_AIR,
+        gcs = KAHUNA_PIN_LED_GCS
     };
     enum LedStatus
     {

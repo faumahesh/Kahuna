@@ -35,6 +35,10 @@
  * @author Gus Grubba <mavlink@grubba.com>
  */
 
+#include <algorithm>
+#include <cstdio>
+#include <cstdarg>
+
 #include "mavesp8266.h"
 #include "mavesp8266_parameters.h"
 
@@ -105,9 +109,13 @@ MavESP8266Log::log(const char *format, ...) {
     va_list arg;
     va_start(arg, format);
     char temp[1024];
-    size_t len = ets_vsnprintf(temp, 1024, format, arg);
+    size_t len = (size_t)vsnprintf(temp, 1024, format, arg);
 #ifdef ENABLE_DEBUG
+#if defined(ARDUINO_ARCH_ESP32)
+    Serial.print(temp);
+#else
     Serial1.print(temp);
+#endif
 #endif
 
     if(_buffer) {
@@ -160,7 +168,7 @@ MavESP8266Log::getLog(uint32_t* pStart, uint32_t* pLen) {
 uint32_t
 MavESP8266Log::getLogSize()
 {
-    return min(_log_position, _buffer_size);
+    return (uint32_t)std::min((size_t)_log_position, _buffer_size);
 }
 
 //---------------------------------------------------------------------------------

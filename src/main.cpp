@@ -42,10 +42,22 @@
 #include "mavesp8266_httpd.h"
 #include "mavesp8266_component.h"
 #include "led_manager.h"
+#include "board_pins.h"
 
+#if defined(ARDUINO_ARCH_ESP8266)
 #include <ESP8266mDNS.h>
+#elif defined(ARDUINO_ARCH_ESP32)
+#include <ESPmDNS.h>
+#endif
 
-#define GPIO02 2
+static uint8_t kahuna_ap_station_count(void)
+{
+#if defined(ARDUINO_ARCH_ESP8266)
+    return wifi_softap_get_station_num();
+#else
+    return WiFi.softAPgetStationNum();
+#endif
+}
 //---------------------------------------------------------------------------------
 //-- HTTP Update Status
 class MavESP8266UpdateImp : public MavESP8266Update
@@ -109,12 +121,12 @@ void wait_for_client()
 {
     DEBUG_LOG("Waiting for a client...\n");
 
-    uint8 client_count = wifi_softap_get_station_num();
+    uint8_t client_count = kahuna_ap_station_count();
     while (!client_count)
     {
         ledManager.blinkLED();
         delay(200);
-        client_count = wifi_softap_get_station_num();
+        client_count = kahuna_ap_station_count();
     }
     ledManager.setLED(ledManager.wifi, ledManager.on);
     ledManager.setLED(ledManager.gcs, ledManager.blink);
@@ -124,20 +136,20 @@ void wait_for_client()
 
 void check_wifi_connected()
 {
-    if (Parameters.getWifiMode() == WIFI_MODE_AP && !wifi_softap_get_station_num())
+    if (Parameters.getWifiMode() == KAHUNA_PARAM_WIFI_AP && !kahuna_ap_station_count())
     {
         ledManager.setLED(ledManager.wifi, ledManager.blink);
     }
-    else if (Parameters.getWifiMode() == WIFI_MODE_AP)
+    else if (Parameters.getWifiMode() == KAHUNA_PARAM_WIFI_AP)
     {
         ledManager.setLED(ledManager.wifi, ledManager.on);
     }
 
-    if (Parameters.getWifiMode() == WIFI_MODE_STA && WiFi.status() != WL_CONNECTED)
+    if (Parameters.getWifiMode() == KAHUNA_PARAM_WIFI_STA && WiFi.status() != WL_CONNECTED)
     {
         ledManager.setLED(ledManager.wifi, ledManager.doubleBlink);
     }
-    else if (Parameters.getWifiMode() == WIFI_MODE_STA && WiFi.status() == WL_CONNECTED)
+    else if (Parameters.getWifiMode() == KAHUNA_PARAM_WIFI_STA && WiFi.status() == WL_CONNECTED)
     {
         ledManager.setLED(ledManager.wifi, ledManager.on);
     }
@@ -151,11 +163,15 @@ IRAM_ATTR void reset_interrupt()
     {
         Parameters.resetToDefaults();
         Parameters.saveAllToEeprom();
-        ESP.reset();
+        ESP.restart();
     }
     else
     {
-        detachInterrupt(GPIO02);
+#if defined(ARDUINO_ARCH_ESP8266)
+        detachInterrupt(KAHUNA_PIN_FACTORY_RESET);
+#else
+        detachInterrupt(digitalPinToInterrupt(KAHUNA_PIN_FACTORY_RESET));
+#endif
     }
 }
 
@@ -163,9 +179,14 @@ void setup_station()
 {
     //-- Connect to an existing network
     ledManager.setLED(ledManager.wifi, ledManager.doubleBlink); // Double blink while searching for station
-    WiFi.setSleepMode(WIFI_NONE_SLEEP);                         // Aparrently it can go to sleep in station mode
+#if defined(ARDUINO_ARCH_ESP8266)
+    WiFi.setSleepMode(WIFI_NONE_SLEEP); // Aparrently it can go to sleep in station mode
+#else
+    WiFi.setSleep(false);
+#endif
     WiFi.mode(WIFI_STA);
-    WiFi.config(Parameters.getWifiStaIP(), Parameters.getWifiStaGateway(), Parameters.getWifiStaSubnet(), 0U, 0U);
+    WiFi.config(Parameters.getWifiStaIP(), Parameters.getWifiStaGateway(), Parameters.getWifiStaSubnet(),
+                IPAddress(0U, 0U, 0U, 0U), IPAddress(0U, 0U, 0U, 0U));
     WiFi.begin(Parameters.getWifiStaSsid(), Parameters.getWifiStaPassword());
 }
 
@@ -173,15 +194,25 @@ void setup_AP()
 {
     ledManager.setLED(ledManager.wifi, ledManager.blink);
     WiFi.mode(WIFI_AP);
+#if defined(ARDUINO_ARCH_ESP8266)
     WiFi.encryptionType(AUTH_WPA2_PSK);
+#endif
     WiFi.softAP(Parameters.getWifiSsid(), Parameters.getWifiPassword(), Parameters.getWifiChannel());
     localIP = WiFi.softAPIP();
 }
 
 void setup_wifi()
 {
-    //-- Boost power to Max
+    //-- Boost power toward max (API differs by core)
+#if defined(ARDUINO_ARCH_ESP8266)
     WiFi.setOutputPower(20.5);
+#elif defined(ARDUINO_ARCH_ESP32)
+#if defined(WIFI_POWER_MAX)
+    WiFi.setTxPower(WIFI_POWER_MAX);
+#elif defined(WIFI_POWER_19_5dBm)
+    WiFi.setTxPower(WIFI_POWER_19_5dBm);
+#endif
+#endif
     //-- MDNS
     char mdsnName[256];
     sprintf(mdsnName, "MavEsp8266-%d", localIP[3]);
@@ -204,7 +235,7 @@ void setup_wifi()
 
 bool connect_wifi()
 {
-    if (Parameters.getWifiMode() == WIFI_MODE_STA)
+    if (Parameters.getWifiMode() == KAHUNA_PARAM_WIFI_STA)
     {
         if (WiFi.status() == WL_CONNECTED)
         {
@@ -219,16 +250,16 @@ bool connect_wifi()
         {
             //-- Fall back to AP mode if no connection could be established
             WiFi.disconnect(true);
-            Parameters.setWifiMode(WIFI_MODE_AP);
+            Parameters.setWifiMode(KAHUNA_PARAM_WIFI_AP);
             setup_AP();
         }
     }
 
-    if (Parameters.getWifiMode() == WIFI_MODE_AP)
+    if (Parameters.getWifiMode() == KAHUNA_PARAM_WIFI_AP)
     {
         DEBUG_LOG("Waiting for a client...\n");
 
-        uint8 client_count = wifi_softap_get_station_num();
+        uint8_t client_count = kahuna_ap_station_count();
 
         if (client_count)
         {
@@ -249,13 +280,17 @@ void setup()
     delay(1000);
     Parameters.begin();
     // set up pins for LEDs
-    pinMode(12, OUTPUT);
-    pinMode(4, OUTPUT);
-    pinMode(5, OUTPUT);
+    pinMode(LEDManager::air, OUTPUT);
+    pinMode(LEDManager::wifi, OUTPUT);
+    pinMode(LEDManager::gcs, OUTPUT);
 
-    //-- Initialize GPIO02 (Used for "Reset To Factory")
-    pinMode(GPIO02, INPUT_PULLUP);
-    attachInterrupt(GPIO02, reset_interrupt, FALLING);
+    //-- Factory reset (hold low in first 5s after boot)
+    pinMode(KAHUNA_PIN_FACTORY_RESET, INPUT_PULLUP);
+#if defined(ARDUINO_ARCH_ESP8266)
+    attachInterrupt(KAHUNA_PIN_FACTORY_RESET, reset_interrupt, FALLING);
+#else
+    attachInterrupt(digitalPinToInterrupt(KAHUNA_PIN_FACTORY_RESET), reset_interrupt, FALLING);
+#endif
 
     Logger.begin(2048);
 
@@ -269,12 +304,12 @@ void setup()
     ledManager.setLED(ledManager.air, ledManager.blink);
     ledManager.setLED(ledManager.gcs, ledManager.blink);
 
-    if (Parameters.getWifiMode() == WIFI_MODE_STA)
+    if (Parameters.getWifiMode() == KAHUNA_PARAM_WIFI_STA)
     {
         setup_station();
     }
 
-    if (Parameters.getWifiMode() == WIFI_MODE_AP)
+    if (Parameters.getWifiMode() == KAHUNA_PARAM_WIFI_AP)
     {
         setup_AP();
     }

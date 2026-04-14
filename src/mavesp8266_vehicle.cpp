@@ -40,6 +40,14 @@
 #include "mavesp8266_parameters.h"
 #include "mavesp8266_component.h"
 #include "led_manager.h"
+#include "board_pins.h"
+
+#if defined(ARDUINO_ARCH_ESP32)
+#define VEHICLE_SERIAL Serial1
+#else
+#define VEHICLE_SERIAL Serial
+#endif
+
 //---------------------------------------------------------------------------------
 MavESP8266Vehicle::MavESP8266Vehicle(LEDManager &ledManager)
     : _queue_count(0), _queue_time(0), _buffer_status(50.0), _ledManager(ledManager)
@@ -54,16 +62,14 @@ void MavESP8266Vehicle::begin(MavESP8266Bridge *forwardTo)
 {
     MavESP8266Bridge::begin(forwardTo);
     //-- Start UART connected to UAS
-    Serial.begin(getWorld()->getParameters()->getUartBaudRate());
-    //-- Swap to TXD2/RXD2 (GPIO015/GPIO013) For ESP12 Only
-#define ARDUINO_ESP8266_ESP12
-#ifdef ENABLE_DEBUG
-#ifdef ARDUINO_ESP8266_ESP12
-    // Serial.swap();
-#endif
+#if defined(ARDUINO_ARCH_ESP32)
+    VEHICLE_SERIAL.begin(getWorld()->getParameters()->getUartBaudRate(), SERIAL_8N1,
+                         KAHUNA_VEHICLE_RX_PIN, KAHUNA_VEHICLE_TX_PIN);
+#else
+    VEHICLE_SERIAL.begin(getWorld()->getParameters()->getUartBaudRate());
 #endif
     // raise serial buffer size (default is 256)
-    Serial.setRxBufferSize(1024);
+    VEHICLE_SERIAL.setRxBufferSize(1024);
 }
 
 //---------------------------------------------------------------------------------
@@ -121,9 +127,9 @@ void MavESP8266Vehicle::readMessageRaw()
     char buf[1024];
     int buf_index = 0;
 
-    while (Serial.available() && buf_index < 300)
+    while (VEHICLE_SERIAL.available() && buf_index < 300)
     {
-        int result = Serial.read();
+        int result = VEHICLE_SERIAL.read();
         if (result >= 0)
         {
             buf[buf_index] = (char)result;
@@ -153,14 +159,14 @@ int MavESP8266Vehicle::sendMessage(mavlink_message_t *message)
     char buf[300];
     unsigned len = mavlink_msg_to_send_buffer((uint8_t *)buf, message);
     // Send it
-    Serial.write((uint8_t *)(void *)buf, len);
+    VEHICLE_SERIAL.write((uint8_t *)(void *)buf, len);
     _status.packets_sent++;
     return 1;
 }
 
 int MavESP8266Vehicle::sendMessageRaw(uint8_t *buffer, int len)
 {
-    Serial.write(buffer, len);
+    VEHICLE_SERIAL.write(buffer, len);
     // Serial.flush();
     return len;
 }
@@ -179,9 +185,9 @@ MavESP8266Vehicle::getStatus()
 bool MavESP8266Vehicle::_readMessage()
 {
     bool msgReceived = false;
-    while (Serial.available())
+    while (VEHICLE_SERIAL.available())
     {
-        int result = Serial.read();
+        int result = VEHICLE_SERIAL.read();
         if (result >= 0)
         {
             // Parsing

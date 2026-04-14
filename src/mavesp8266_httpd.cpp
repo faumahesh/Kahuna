@@ -35,7 +35,13 @@
  * @author Gus Grubba <mavlink@grubba.com>
  */
 
+#if defined(ARDUINO_ARCH_ESP8266)
 #include <ESP8266WebServer.h>
+#include <Updater.h>
+#else
+#include <WebServer.h>
+#include <Update.h>
+#endif
 #include "mavesp8266.h"
 #include "mavesp8266_httpd.h"
 #include "mavesp8266_parameters.h"
@@ -92,7 +98,11 @@ const char *kFlashMaps[7] = {
 static uint32_t flash = 0;
 static char paramCRC[12] = {""};
 
+#if defined(ARDUINO_ARCH_ESP8266)
 ESP8266WebServer webServer(80);
+#else
+WebServer webServer(80);
+#endif
 MavESP8266Update *updateCB = NULL;
 bool started = false;
 
@@ -185,12 +195,20 @@ void handle_upload_status()
 #ifdef DEBUG_SERIAL
         DEBUG_SERIAL.setDebugOutput(true);
 #endif
+#if defined(ARDUINO_ARCH_ESP8266)
         WiFiUDP::stopAll();
+#else
+        getWorld()->getGCS()->stopUdpForUpdate();
+#endif
 #ifdef DEBUG_SERIAL
         DEBUG_SERIAL.printf("Update: %s\n", upload.filename.c_str());
 #endif
+#if defined(ARDUINO_ARCH_ESP8266)
         uint32_t maxSketchSpace = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
         if (!Update.begin(maxSketchSpace))
+#else
+        if (!Update.begin(UPDATE_SIZE_UNKNOWN))
+#endif
         {
 #ifdef DEBUG_SERIAL
             Update.printError(DEBUG_SERIAL);
@@ -266,7 +284,7 @@ void handle_getParameters() // This can be improved a lot
         }
         else if (i == getWorld()->getParameters()->ID_MODE)
         {
-            snprintf(buffer, sizeof(buffer), "<tr><td>%s</td><td>%s</td></tr>", getWorld()->getParameters()->getAt(i)->id, getWorld()->getParameters()->getWifiMode() == WIFI_MODE_AP ? "AP" : "STA");
+            snprintf(buffer, sizeof(buffer), "<tr><td>%s</td><td>%s</td></tr>", getWorld()->getParameters()->getAt(i)->id, getWorld()->getParameters()->getWifiMode() == KAHUNA_PARAM_WIFI_AP ? "AP" : "STA");
             webServer.sendContent(buffer);
         }
         else if (i == getWorld()->getParameters()->ID_IPADDRESS)
@@ -382,8 +400,8 @@ static void handle_setup()
              "<div class=row>"
              "<div class=col-l><label>Baud Rate</label></div>"
              "<div class=col-r><select name='baud'>",
-             getWorld()->getParameters()->getWifiMode() == WIFI_MODE_AP ? " checked" : "",
-             getWorld()->getParameters()->getWifiMode() == WIFI_MODE_STA ? " checked" : "");
+             getWorld()->getParameters()->getWifiMode() == KAHUNA_PARAM_WIFI_AP ? " checked" : "",
+             getWorld()->getParameters()->getWifiMode() == KAHUNA_PARAM_WIFI_STA ? " checked" : "");
     webServer.sendContent(buffer);
 
     // Build the baud rate dropdown options into the buffer (we loop through so we can select the current baud rate)
@@ -510,7 +528,12 @@ static void handle_getStatus()
 
     webServer.sendContent_P(kHEADER2);
 
-    snprintf(buffer, sizeof(buffer), "<div class=p_content><div class=formbox><p>Comm Status<table><tr><td class=left>Packets Received from GCS<td class=right>%u<tr><td>Packets Sent to GCS<td>%u<tr><td>GCS Packets Lost<td>%u<tr><td>Packets Received from Vehicle<td>%u<tr><td>Packets Sent to Vehicle<td>%u<tr><td>Vehicle Packets Lost<td>%u<tr><td>Radio Messages<td>%u</table><p>System Status<table><tr><td class=left>Flash Size<td class=right>%u<tr><td>Flash Available<td>%u<tr><td>RAM Left<td>%u<tr><td>Parameters CRC<td>'%s'</table></div></div></body></html>", gcsStatus->packets_received, gcsStatus->packets_sent, gcsStatus->packets_lost, vehicleStatus->packets_received, vehicleStatus->packets_sent, vehicleStatus->packets_lost, gcsStatus->radio_status_sent, ESP.getFlashChipRealSize(), flash, ESP.getFreeHeap(), paramCRC);
+#if defined(ARDUINO_ARCH_ESP8266)
+    uint32_t flashChipSize = ESP.getFlashChipRealSize();
+#else
+    uint32_t flashChipSize = ESP.getFlashChipSize();
+#endif
+    snprintf(buffer, sizeof(buffer), "<div class=p_content><div class=formbox><p>Comm Status<table><tr><td class=left>Packets Received from GCS<td class=right>%u<tr><td>Packets Sent to GCS<td>%u<tr><td>GCS Packets Lost<td>%u<tr><td>Packets Received from Vehicle<td>%u<tr><td>Packets Sent to Vehicle<td>%u<tr><td>Vehicle Packets Lost<td>%u<tr><td>Radio Messages<td>%u</table><p>System Status<table><tr><td class=left>Flash Size<td class=right>%u<tr><td>Flash Available<td>%u<tr><td>RAM Left<td>%u<tr><td>Parameters CRC<td>'%s'</table></div></div></body></html>", gcsStatus->packets_received, gcsStatus->packets_sent, gcsStatus->packets_lost, vehicleStatus->packets_received, vehicleStatus->packets_sent, vehicleStatus->packets_lost, gcsStatus->radio_status_sent, flashChipSize, flash, ESP.getFreeHeap(), paramCRC);
 
     webServer.sendContent(buffer);
 
@@ -543,7 +566,16 @@ void handle_getJSysInfo()
     {
         snprintf(paramCRC, sizeof(paramCRC), "%08X", getWorld()->getParameters()->paramHashCheck());
     }
+#if defined(ARDUINO_ARCH_ESP8266)
     uint32_t fid = spi_flash_get_id();
+    const char *flashSizeLabel = kFlashMaps[system_get_flash_size_map()];
+#else
+    uint64_t mac = ESP.getEfuseMac();
+    uint32_t fid = (uint32_t)(mac ^ (mac >> 32));
+    static char flashSizeBuf[32];
+    snprintf(flashSizeBuf, sizeof(flashSizeBuf), "%u KB", (unsigned)(ESP.getFlashChipSize() / 1024));
+    const char *flashSizeLabel = flashSizeBuf;
+#endif
     char message[512];
     snprintf(message, 512,
              "{ "
@@ -554,7 +586,7 @@ void handle_getJSysInfo()
              "\"logsize\": \"%u\", "
              "\"paramcrc\": \"%s\""
              " }",
-             kFlashMaps[system_get_flash_size_map()],
+             flashSizeLabel,
              (long unsigned int)(fid & 0xff), (long unsigned int)((fid & 0xff00) | ((fid >> 16) & 0xff)),
              flash,
              ESP.getFreeHeap(),

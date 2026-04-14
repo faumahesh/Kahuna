@@ -47,6 +47,7 @@ public:
     MavESP8266GCS(LEDManager &ledManager);
 
     void begin(MavESP8266Bridge *forwardTo, IPAddress gcsIP);
+    void stopUdpForUpdate();
     void readMessage();
     void readMessageRaw();
     int sendMessage(mavlink_message_t *message, int count);
