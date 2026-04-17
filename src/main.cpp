@@ -50,6 +50,23 @@
 #include <ESPmDNS.h>
 #endif
 
+// USB / spare UART for printf-style debug (ESP8266 uses Serial for vehicle MAVLink; use Serial1 for TX debug)
+#if defined(ARDUINO_ARCH_ESP32)
+#define KAHUNA_DEBUG_SERIAL Serial
+#else
+#define KAHUNA_DEBUG_SERIAL Serial1
+#endif
+
+// Must match serial monitor baud (see platformio.ini monitor_speed for your env).
+#ifndef KAHUNA_DEBUG_SERIAL_BAUD
+#define KAHUNA_DEBUG_SERIAL_BAUD 115200
+#endif
+
+static inline void kahuna_debug_flush()
+{
+    KAHUNA_DEBUG_SERIAL.flush();
+}
+
 static uint8_t kahuna_ap_station_count(void)
 {
 #if defined(ARDUINO_ARCH_ESP8266)
@@ -115,6 +132,26 @@ MavESP8266World *getWorld()
     return &World;
 }
 
+static bool sta_dhcp_enabled()
+{
+    return (uint32_t)Parameters.getWifiStaIP() == 0U && (uint32_t)Parameters.getWifiStaGateway() == 0U &&
+           (uint32_t)Parameters.getWifiStaSubnet() == 0U;
+}
+
+static void init_debug_serial()
+{
+    KAHUNA_DEBUG_SERIAL.begin(KAHUNA_DEBUG_SERIAL_BAUD);
+#if defined(ARDUINO_ARCH_ESP32)
+    // Native USB CDC often needs a moment after begin before the host sees data.
+    delay(50);
+#endif
+    KAHUNA_DEBUG_SERIAL.println();
+    KAHUNA_DEBUG_SERIAL.println("Kahuna: debug serial ready");
+    kahuna_debug_flush();
+}
+
+static uint8_t ap_last_station_count;
+
 //---------------------------------------------------------------------------------
 //-- Wait for a DHCPD client
 void wait_for_client()
@@ -136,13 +173,23 @@ void wait_for_client()
 
 void check_wifi_connected()
 {
-    if (Parameters.getWifiMode() == KAHUNA_PARAM_WIFI_AP && !kahuna_ap_station_count())
+    if (Parameters.getWifiMode() == KAHUNA_PARAM_WIFI_AP)
     {
-        ledManager.setLED(ledManager.wifi, ledManager.blink);
-    }
-    else if (Parameters.getWifiMode() == KAHUNA_PARAM_WIFI_AP)
-    {
-        ledManager.setLED(ledManager.wifi, ledManager.on);
+        uint8_t n = kahuna_ap_station_count();
+        if (n > ap_last_station_count)
+        {
+            KAHUNA_DEBUG_SERIAL.printf("AP: %u station(s) connected  AP IP: %s\n", n, WiFi.softAPIP().toString().c_str());
+            kahuna_debug_flush();
+        }
+        ap_last_station_count = n;
+        if (!n)
+        {
+            ledManager.setLED(ledManager.wifi, ledManager.blink);
+        }
+        else
+        {
+            ledManager.setLED(ledManager.wifi, ledManager.on);
+        }
     }
 
     if (Parameters.getWifiMode() == KAHUNA_PARAM_WIFI_STA && WiFi.status() != WL_CONNECTED)
@@ -184,6 +231,11 @@ void setup_station()
 #else
     WiFi.setSleep(false);
 #endif
+    if (sta_dhcp_enabled())
+    {
+        KAHUNA_DEBUG_SERIAL.println("STA: requesting DHCP (STA IP/gateway/mask are 0.0.0.0)");
+        kahuna_debug_flush();
+    }
     WiFi.mode(WIFI_STA);
     WiFi.config(Parameters.getWifiStaIP(), Parameters.getWifiStaGateway(), Parameters.getWifiStaSubnet(),
                 IPAddress(0U, 0U, 0U, 0U), IPAddress(0U, 0U, 0U, 0U));
@@ -242,16 +294,23 @@ bool connect_wifi()
             ledManager.setLED(ledManager.wifi, ledManager.on);
             ledManager.setLED(ledManager.gcs, ledManager.blink);
             localIP = WiFi.localIP();
+            if (sta_dhcp_enabled())
+            {
+                KAHUNA_DEBUG_SERIAL.printf("STA DHCP: IP %s  gateway %s  netmask %s\n", localIP.toString().c_str(),
+                                            WiFi.gatewayIP().toString().c_str(), WiFi.subnetMask().toString().c_str());
+                kahuna_debug_flush();
+            }
             WiFi.setAutoReconnect(true);
             setup_wifi();
             return false;
         }
-        else if (millis() > 60000)
+        else if (millis() > 30000) 
         {
-            //-- Fall back to AP mode if no connection could be established
+            //-- Fall back to AP mode if no connection could be established in 30 seconds
             WiFi.disconnect(true);
             Parameters.setWifiMode(KAHUNA_PARAM_WIFI_AP);
             setup_AP();
+            ap_last_station_count = 0;
         }
     }
 
@@ -266,6 +325,13 @@ bool connect_wifi()
             ledManager.setLED(ledManager.wifi, ledManager.on);
             ledManager.setLED(ledManager.gcs, ledManager.blink);
             DEBUG_LOG("Got %d client(s)\n", client_count);
+            if (client_count > ap_last_station_count)
+            {
+                KAHUNA_DEBUG_SERIAL.printf("AP: %u station(s) connected  AP IP: %s\n", client_count,
+                                            WiFi.softAPIP().toString().c_str());
+                kahuna_debug_flush();
+            }
+            ap_last_station_count = client_count;
             setup_wifi();
             return false;
         }
@@ -277,6 +343,8 @@ bool connect_wifi()
 //-- Set things up
 void setup()
 {
+    // Bring up debug UART/USB before long delay or EEPROM (ESP32-C3: needs ARDUINO_USB_CDC_ON_BOOT in platformio.ini).
+    init_debug_serial();
     delay(1000);
     Parameters.begin();
     ledManager.init();
@@ -313,6 +381,7 @@ void setup()
     if (Parameters.getWifiMode() == KAHUNA_PARAM_WIFI_AP)
     {
         setup_AP();
+        ap_last_station_count = 0;
     }
 
     Vehicle.begin(&GCS);

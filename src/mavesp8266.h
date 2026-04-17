@@ -72,7 +72,8 @@ class MavESP8266Status;
 #define MAVESP8266_VERSION ((MAVESP8266_VERSION_MAJOR << 24) & 0xFF00000) | ((MAVESP8266_VERSION_MINOR << 16) & 0x00FF0000) | (MAVESP8266_VERSION_BUILD & 0xFFFF)
 
 //-- Debug sent out to Serial1 (GPIO02), which is TX only (no RX).
-// #define ENABLE_DEBUG
+// for ESP32, use Serial instead of Serial1
+#define ENABLE_DEBUG
 
 #ifdef ENABLE_DEBUG
 #define DEBUG_LOG(format, ...)                               \
