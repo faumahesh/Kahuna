@@ -1,5 +1,57 @@
 #include "led_manager.h"
 
+#if defined(KAHUNA_BOARD_ESP32C3_SUPERMINI)
+Adafruit_NeoPixel pixels(NUMPIXELS, GPIO_RGB_LED, NEO_GRB + NEO_KHZ800);
+
+static bool ledChannelActive(LEDManager::LedStatus status, int value)
+{
+    if (status == LEDManager::off)
+    {
+        return false;
+    }
+    return value != 0;
+}
+
+static void showRgbStatus(LEDManager::LedStatus gcsStatus, int gcsValue,
+                          LEDManager::LedStatus wifiStatus, int wifiValue,
+                          LEDManager::LedStatus airStatus, int airValue)
+{
+    const bool wifiActive = ledChannelActive(wifiStatus, wifiValue);
+    const bool gcsActive = ledChannelActive(gcsStatus, gcsValue);
+    const bool airActive = ledChannelActive(airStatus, airValue);
+
+    uint8_t red = 0;
+    uint8_t green = 0;
+    uint8_t blue = 0;
+
+    // Priority mode on single RGB LED: WiFi > GCS > Air.
+    if (wifiActive)
+    {
+        green = 150;
+    }
+    else if (gcsActive)
+    {
+        red = 150;
+    }
+    else if (airActive)
+    {
+        blue = 150;
+    }
+
+    pixels.setPixelColor(0, pixels.Color(red, green, blue));
+    pixels.show();
+}
+#endif
+
+void LEDManager::init()
+{
+#if defined(KAHUNA_BOARD_ESP32C3_SUPERMINI)
+    pixels.begin();
+    pixels.clear();
+    pixels.show();
+#endif
+}
+
 void LEDManager::setLED(Led selectedLed, LedStatus ledStatus)
 {
     switch (selectedLed)
@@ -11,11 +63,9 @@ void LEDManager::setLED(Led selectedLed, LedStatus ledStatus)
             switch (_gcsLedStatus)
             {
             case off:
-                digitalWrite(gcs, LOW);
                 _gcsValue = LOW;
                 break;
             case on:
-                digitalWrite(gcs, HIGH);
                 _gcsValue = HIGH;
                 break;
             default:
@@ -30,15 +80,12 @@ void LEDManager::setLED(Led selectedLed, LedStatus ledStatus)
             switch (_wifiLedStatus)
             {
             case off:
-                digitalWrite(wifi, LOW);
                 _wifiValue = LOW;
                 break;
             case on:
-                digitalWrite(wifi, HIGH);
                 _wifiValue = HIGH;
                 break;
             case doubleBlink:
-                digitalWrite(wifi, LOW);
                 _wifiValue = LOW;
             default:
                 break;
@@ -52,11 +99,9 @@ void LEDManager::setLED(Led selectedLed, LedStatus ledStatus)
             switch (_airLedStatus)
             {
             case off:
-                digitalWrite(air, LOW);
                 _airValue = LOW;
                 break;
             case on:
-                digitalWrite(air, HIGH);
                 _airValue = HIGH;
             default:
                 break;
@@ -66,6 +111,14 @@ void LEDManager::setLED(Led selectedLed, LedStatus ledStatus)
     default:
         break;
     }
+
+#if defined(KAHUNA_BOARD_ESP32C3_SUPERMINI)
+    showRgbStatus(_gcsLedStatus, _gcsValue, _wifiLedStatus, _wifiValue, _airLedStatus, _airValue);
+#else
+    digitalWrite(gcs, _gcsValue);
+    digitalWrite(wifi, _wifiValue);
+    digitalWrite(air, _airValue);
+#endif
 }
 void LEDManager::blinkLED()
 {
@@ -75,18 +128,23 @@ void LEDManager::blinkLED()
         if (_gcsLedStatus == blink)
         {
             _gcsValue = !_gcsValue;
-            digitalWrite(gcs, _gcsValue);
         }
         if (_wifiLedStatus == blink)
         {
             _wifiValue = !_wifiValue;
-            digitalWrite(wifi, _wifiValue);
         }
         if (_airLedStatus == blink)
         {
             _airValue = !_airValue;
-            digitalWrite(air, _airValue);
         }
+
+#if defined(KAHUNA_BOARD_ESP32C3_SUPERMINI)
+        showRgbStatus(_gcsLedStatus, _gcsValue, _wifiLedStatus, _wifiValue, _airLedStatus, _airValue);
+#else
+        digitalWrite(gcs, _gcsValue);
+        digitalWrite(wifi, _wifiValue);
+        digitalWrite(air, _airValue);
+#endif
     }
 }
 
@@ -101,7 +159,6 @@ void LEDManager::doubleBlinkLED()
         if (_wifiLedStatus == doubleBlink)
         {
             _wifiValue = !_wifiValue;
-            digitalWrite(wifi, _wifiValue);
         }
     }
     else if (millis() >= _timeNextDoubleBlink)
@@ -111,7 +168,12 @@ void LEDManager::doubleBlinkLED()
         if (_wifiLedStatus == doubleBlink)
         {
             _wifiValue = !_wifiValue;
-            digitalWrite(wifi, _wifiValue);
         }
     }
+
+#if defined(KAHUNA_BOARD_ESP32C3_SUPERMINI)
+    showRgbStatus(_gcsLedStatus, _gcsValue, _wifiLedStatus, _wifiValue, _airLedStatus, _airValue);
+#else
+    digitalWrite(wifi, _wifiValue);
+#endif
 }

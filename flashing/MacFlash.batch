@@ -1,3 +1,34 @@
-while true; do
-python3 /Users/samknox/.platformio/packages/tool-esptoolpy/esptool.py --after soft_reset --chip esp8266 --port /dev/cu.usbserial-AQ035JK3 --baud 3000000 write_flash 0x0 /Users/samknox/Documents/Kahuna/.pio/build/esp07s/mavesp-esp07s-2.4.0.bin
-done
+#!/usr/bin/env bash
+
+# Example Usage: sh flashing/MacFlash.batch esp32c3_supermini /dev/cu.usbmodem31101
+MODEL="${1:-esp8266}"
+
+case "${MODEL}" in
+    esp8266)
+        python3 /Users/samknox/.platformio/packages/tool-esptoolpy/esptool.py \
+        --after soft_reset \
+        --chip esp8266 \
+        --port /dev/cu.usbserial-AQ035JK3 \
+        --baud 3000000 \
+        write_flash 0x0 /Users/samknox/Documents/Kahuna/.pio/build/esp07s/mavesp-esp07s-2.4.0.bin
+    ;;
+
+    esp32c3_supermini)
+        PORT="${2:-/dev/cu.usbmodem31101}"
+        echo "Flashing esp32c3_supermini."
+        esptool \
+        --chip esp32c3 \
+        --port $PORT \
+        --baud 921600 \
+        write-flash \
+        0x0    .pio/build/esp32c3_supermini/bootloader.bin \
+        0x8000 .pio/build/esp32c3_supermini/partitions.bin \
+        0x10000 .pio/build/esp32c3_supermini/mavesp-esp32-c3-devkitm-1-2.4.0.bin
+    ;;
+
+    *)
+        echo "Unknown model: ${MODEL}"
+        echo "Usage: $0 [esp8266|esp32c3_supermini]"
+        exit 1
+    ;;
+esac

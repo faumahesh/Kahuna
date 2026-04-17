@@ -68,7 +68,7 @@ const char PROGMEM kHEADER1_C6[] = "<text dominant-baseline=auto fill=#000000 fo
 
 const uint32_t PROGMEM baudRates[] = {9600, 19200, 38400, 57600, 111100, 115200, 230400, 256000, 460800, 500000, 921600};
 const uint8_t PROGMEM numBaudRates = 11;
-char buffer[1024];
+char buffer[2048];
 
 const char *kBAUD = "baud";
 const char *kPWD = "pwd";
@@ -106,6 +106,25 @@ WebServer webServer(80);
 MavESP8266Update *updateCB = NULL;
 bool started = false;
 
+// Send the header content to the web server for various pages
+static void sendHeaderContent()
+{
+    webServer.setContentLength(CONTENT_LENGTH_UNKNOWN);
+    webServer.send_P(200, kTEXTHTML, kHEADER1_C1);
+    webServer.sendContent_P(kHEADER1_C2);
+    webServer.sendContent_P(kHEADER1_C3);
+    webServer.sendContent_P(kHEADER1_C4);
+    webServer.sendContent_P(kHEADER1_C5);
+    webServer.sendContent_P(kHEADER1_C6);
+
+    const char *buildDateTime = __DATE__ " " __TIME__;
+    snprintf(buffer, sizeof(buffer), "%u.%u.%u (Build: %s)</p></div><div class=topnav id=BRtopnav><a href=/>Setup</a><a href=/getstatus>Status</a><a href=/getparameters>Parameters</a><a href=/update>Firmware Update</a><a href=/reboot class=active>Reboot</a>", MAVESP8266_VERSION_MAJOR, MAVESP8266_VERSION_MINOR, MAVESP8266_VERSION_BUILD, buildDateTime);
+    //snprintf(buffer, sizeof(buffer), "%u.%u.%u</p></div><div class=topnav id=BRtopnav><a href=/>Setup</a><a href=/getstatus>Status</a><a href=/getparameters>Parameters</a><a href=/update>Firmware Update</a><a href=/reboot class=active>Reboot</a>", MAVESP8266_VERSION_MAJOR, MAVESP8266_VERSION_MINOR, MAVESP8266_VERSION_BUILD);
+    webServer.sendContent(buffer);
+    webServer.sendContent_P(kHEADER2);
+}
+
+
 // String message;
 //---------------------------------------------------------------------------------
 void setNoCacheHeaders()
@@ -132,18 +151,7 @@ void handle_update()
 {
     webServer.sendHeader("Connection", "close");
     webServer.sendHeader(FPSTR(kACCESSCTL), "*");
-    webServer.setContentLength(CONTENT_LENGTH_UNKNOWN);
-    webServer.send_P(200, kTEXTHTML, kHEADER1_C1);
-    webServer.sendContent_P(kHEADER1_C2);
-    webServer.sendContent_P(kHEADER1_C3);
-    webServer.sendContent_P(kHEADER1_C4);
-    webServer.sendContent_P(kHEADER1_C5);
-    webServer.sendContent_P(kHEADER1_C6);
-
-    snprintf(buffer, sizeof(buffer), "%u.%u.%u</p></div><div class=topnav id=BRtopnav><a href=/>Setup</a><a href=/getstatus>Status</a><a href=/getparameters>Parameters</a><a href=/update class=active>Firmware Update</a><a href=/reboot>Reboot</a>", MAVESP8266_VERSION_MAJOR, MAVESP8266_VERSION_MINOR, MAVESP8266_VERSION_BUILD);
-    webServer.sendContent(buffer);
-
-    webServer.sendContent_P(kHEADER2);
+    sendHeaderContent();
     webServer.sendContent_P(kUPLOADFORM);
     webServer.sendContent("");
 }
@@ -153,18 +161,7 @@ void handle_upload()
 {
     webServer.sendHeader("Connection", "close");
     webServer.sendHeader(FPSTR(kACCESSCTL), "*");
-    webServer.setContentLength(CONTENT_LENGTH_UNKNOWN);
-    webServer.send_P(200, kTEXTHTML, kHEADER1_C1);
-    webServer.sendContent_P(kHEADER1_C2);
-    webServer.sendContent_P(kHEADER1_C3);
-    webServer.sendContent_P(kHEADER1_C4);
-    webServer.sendContent_P(kHEADER1_C5);
-    webServer.sendContent_P(kHEADER1_C6);
-
-    snprintf(buffer, sizeof(buffer), "%u.%u.%u</p></div><div class=topnav id=BRtopnav><a href=/>Setup</a><a href=/getstatus>Status</a><a href=/getparameters>Parameters</a><a href=/update class=active>Firmware Update</a><a href=/reboot>Reboot</a>", MAVESP8266_VERSION_MAJOR, MAVESP8266_VERSION_MINOR, MAVESP8266_VERSION_BUILD);
-    webServer.sendContent(buffer);
-
-    webServer.sendContent_P(kHEADER2);
+    sendHeaderContent();
     webServer.sendContent_P(kUPLOADSUCCESS);
 
     webServer.sendContent("");
@@ -259,20 +256,7 @@ void handle_upload_status()
 void handle_getParameters() // This can be improved a lot
 {
     setNoCacheHeaders();
-
-    webServer.setContentLength(CONTENT_LENGTH_UNKNOWN);
-    webServer.send_P(200, kTEXTHTML, kHEADER1_C1);
-    webServer.sendContent_P(kHEADER1_C2);
-    webServer.sendContent_P(kHEADER1_C3);
-    webServer.sendContent_P(kHEADER1_C4);
-    webServer.sendContent_P(kHEADER1_C5);
-    webServer.sendContent_P(kHEADER1_C6);
-
-    snprintf(buffer, sizeof(buffer), "%u.%u.%u</p></div><div class=topnav id=BRtopnav><a href=/>Setup</a><a href=/getstatus>Status</a><a href=/getparameters class=active>Parameters</a><a href=/update>Firmware Update</a><a href=/reboot>Reboot</a>", MAVESP8266_VERSION_MAJOR, MAVESP8266_VERSION_MINOR, MAVESP8266_VERSION_BUILD);
-    webServer.sendContent(buffer);
-
-    webServer.sendContent_P(kHEADER2);
-
+    sendHeaderContent();
     webServer.sendContent("<div class=p_content><div class='formbox'><table><tr><td>Name</td><td>Value</td></tr>");
 
     for (int i = 0; i < MavESP8266Parameters::ID_COUNT; i++)
@@ -366,27 +350,8 @@ void handle_getParameters() // This can be improved a lot
 static void handle_setup()
 {
     setNoCacheHeaders();
-    webServer.setContentLength(CONTENT_LENGTH_UNKNOWN);
-
-    webServer.send_P(200, kTEXTHTML, kHEADER1_C1);
-    webServer.sendContent_P(kHEADER1_C2);
-    webServer.sendContent_P(kHEADER1_C3);
-    webServer.sendContent_P(kHEADER1_C4);
-    webServer.sendContent_P(kHEADER1_C5);
-    webServer.sendContent_P(kHEADER1_C6);
-
-    snprintf(buffer, sizeof(buffer),
-             "%u.%u.%u</p></div><div class=topnav id=BRtopnav>"
-             "<a href=/ class=active>Setup</a><a href=/getstatus>Status</a>"
-             "<a href=/getparameters>Parameters</a><a href=/update>Firmware Update</a>"
-             "<a href=/reboot>Reboot</a>",
-             MAVESP8266_VERSION_MAJOR,
-             MAVESP8266_VERSION_MINOR,
-             MAVESP8266_VERSION_BUILD);
-    webServer.sendContent(buffer);
-
-    webServer.sendContent_P(kHEADER2);
-
+    sendHeaderContent();
+    
     snprintf(buffer, sizeof(buffer),
              "<div class=p_content><form action=/setparameters method=post>"
              "<div class=formbox>"
@@ -514,26 +479,20 @@ static void handle_getStatus()
     linkStatus *vehicleStatus = getWorld()->getVehicle()->getStatus();
 
     setNoCacheHeaders();
-
-    webServer.setContentLength(CONTENT_LENGTH_UNKNOWN);
-    webServer.send_P(200, kTEXTHTML, kHEADER1_C1);
-    webServer.sendContent_P(kHEADER1_C2);
-    webServer.sendContent_P(kHEADER1_C3);
-    webServer.sendContent_P(kHEADER1_C4);
-    webServer.sendContent_P(kHEADER1_C5);
-    webServer.sendContent_P(kHEADER1_C6);
-
-    snprintf(buffer, sizeof(buffer), "%u.%u.%u</p></div><div class=topnav id=BRtopnav><a href=/>Setup</a><a href=/getstatus class=active>Status</a><a href=/getparameters>Parameters</a><a href=/update>Firmware Update</a><a href=/reboot>Reboot</a>", MAVESP8266_VERSION_MAJOR, MAVESP8266_VERSION_MINOR, MAVESP8266_VERSION_BUILD);
-    webServer.sendContent(buffer);
-
-    webServer.sendContent_P(kHEADER2);
+    sendHeaderContent();
 
 #if defined(ARDUINO_ARCH_ESP8266)
     uint32_t flashChipSize = ESP.getFlashChipRealSize();
 #else
     uint32_t flashChipSize = ESP.getFlashChipSize();
 #endif
-    snprintf(buffer, sizeof(buffer), "<div class=p_content><div class=formbox><p>Comm Status<table><tr><td class=left>Packets Received from GCS<td class=right>%u<tr><td>Packets Sent to GCS<td>%u<tr><td>GCS Packets Lost<td>%u<tr><td>Packets Received from Vehicle<td>%u<tr><td>Packets Sent to Vehicle<td>%u<tr><td>Vehicle Packets Lost<td>%u<tr><td>Radio Messages<td>%u</table><p>System Status<table><tr><td class=left>Flash Size<td class=right>%u<tr><td>Flash Available<td>%u<tr><td>RAM Left<td>%u<tr><td>Parameters CRC<td>'%s'</table></div></div></body></html>", gcsStatus->packets_received, gcsStatus->packets_sent, gcsStatus->packets_lost, vehicleStatus->packets_received, vehicleStatus->packets_sent, vehicleStatus->packets_lost, gcsStatus->radio_status_sent, flashChipSize, flash, ESP.getFreeHeap(), paramCRC);
+    unsigned gcsLostPct = gcsStatus->packets_received > 0
+                              ? (unsigned)((gcsStatus->packets_lost * 100) / gcsStatus->packets_received)
+                              : 0;
+    unsigned vehLostPct = vehicleStatus->packets_received > 0
+                              ? (unsigned)((vehicleStatus->packets_lost * 100) / vehicleStatus->packets_received)
+                              : 0;
+    snprintf(buffer, sizeof(buffer), "<div class=p_content><div class=formbox><div class=row><div class=col-l>Refresh Rate</div><div class=col-r><select id=refreshRate onchange=setStatusRefreshRate()><option value='1'>1 second<option value='2'>2 seconds<option value='5' selected>5 seconds<option value='10'>10 seconds<option value='15'>15 seconds</select></div></div><p>Comm Status<table><tr><td class=left>Packets Received from GCS<td class=right>%u<tr><td>Packets Sent to GCS<td>%u<tr><td>GCS Packets Lost<td>%u (%u%%)<tr><td>Packets Received from Vehicle<td>%u<tr><td>Packets Sent to Vehicle<td>%u<tr><td>Vehicle Packets Lost<td>%u (%u%%)<tr><td>Radio Messages<td>%u</table><p>System Status<table><tr><td class=left>Flash Size<td class=right>%u<tr><td>Flash Available<td>%u<tr><td>RAM Left<td>%u<tr><td>Parameters CRC<td>'%s'</table></div></div><script>function setStatusRefreshRate(){var s=document.getElementById('refreshRate');if(s){localStorage.setItem('statusRefreshRate',s.value);window.location.reload();}}(function(){var s=document.getElementById('refreshRate');if(!s)return;var rate=localStorage.getItem('statusRefreshRate')||'5';s.value=rate;setTimeout(function(){window.location.reload();},parseInt(rate,10)*1000);})();</script></body></html>", gcsStatus->packets_received, gcsStatus->packets_sent, gcsStatus->packets_lost, gcsLostPct, vehicleStatus->packets_received, vehicleStatus->packets_sent, vehicleStatus->packets_lost, vehLostPct, gcsStatus->radio_status_sent, flashChipSize, flash, ESP.getFreeHeap(), paramCRC);
 
     webServer.sendContent(buffer);
 
@@ -750,24 +709,14 @@ void handle_setDefaults()
 static void handle_reboot()
 {
     setNoCacheHeaders();
-    webServer.setContentLength(CONTENT_LENGTH_UNKNOWN);
-    webServer.send_P(200, kTEXTHTML, kHEADER1_C1);
-    webServer.sendContent_P(kHEADER1_C2);
-    webServer.sendContent_P(kHEADER1_C3);
-    webServer.sendContent_P(kHEADER1_C4);
-    webServer.sendContent_P(kHEADER1_C5);
-    webServer.sendContent_P(kHEADER1_C6);
 
-    snprintf(buffer, sizeof(buffer), "%u.%u.%u</p></div><div class=topnav id=BRtopnav><a href=/>Setup</a><a href=/getstatus>Status</a><a href=/getparameters>Parameters</a><a href=/update>Firmware Update</a><a href=/reboot class=active>Reboot</a>", MAVESP8266_VERSION_MAJOR, MAVESP8266_VERSION_MINOR, MAVESP8266_VERSION_BUILD);
-    webServer.sendContent(buffer);
-
-    webServer.sendContent_P(kHEADER2);
-
+    sendHeaderContent();
     webServer.sendContent("<div class=p_content><div class='formbox'>rebooting ...</div></div></body></html>");
     webServer.sendContent("");
     delay(500);
     ESP.restart();
 }
+
 
 //---------------------------------------------------------------------------------
 //-- 404

@@ -4,6 +4,15 @@
 #ifndef LED_MANAGER_H
 #define LED_MANAGER_H
 
+
+#if defined(KAHUNA_BOARD_ESP32C3_SUPERMINI)
+#include <Adafruit_NeoPixel.h>
+
+#define GPIO_RGB_LED   8 // Onboard RGB LED is usually on Pin 8 for ESP32-C3 SuperMini
+#define NUMPIXELS      1 // Only one LED on the ESP32-C3 SuperMini  
+extern Adafruit_NeoPixel pixels;
+#endif
+
 class LEDManager
 {
 public:
@@ -20,6 +29,7 @@ public:
         blink,
         doubleBlink
     };
+    void init();
     void setLED(Led selectedLed, LedStatus status);
     void blinkLED();
     void doubleBlinkLED();

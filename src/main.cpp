@@ -279,6 +279,7 @@ void setup()
 {
     delay(1000);
     Parameters.begin();
+    ledManager.init();
     // set up pins for LEDs
     pinMode(LEDManager::air, OUTPUT);
     pinMode(LEDManager::wifi, OUTPUT);

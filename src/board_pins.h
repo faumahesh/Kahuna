@@ -23,6 +23,8 @@
 
 #elif defined(ARDUINO_ARCH_ESP32)
 
+// ESP32-C3 Plus: https://www.espboards.dev/esp32/esp32-c3-super-mini-plus/
+
 #ifndef KAHUNA_PIN_LED_WIFI
 #define KAHUNA_PIN_LED_WIFI 8
 #endif

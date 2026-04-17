@@ -1,4 +1,6 @@
 import datetime
+import configparser
+import os
 import subprocess
 
 Import("env")
@@ -20,12 +22,12 @@ env.Append(
     ]
 )
 
-my_flags = env.ParseFlags(env["BUILD_FLAGS"])
-defines = dict(my_flags.get("CPPDEFINES") or [])
-
-version_string = defines.get("VERSION_STRING")
-if version_string is None:
-    version_string = "0.0.0"
+config = configparser.ConfigParser(interpolation=None)
+config.read(os.path.join(env["PROJECT_DIR"], "platformio.ini"))
+major = config.get("version", "major", fallback="0").strip()
+minor = config.get("version", "minor", fallback="0").strip()
+build = config.get("version", "build", fallback="0").strip()
+version_string = f"{major}.{minor}.{build}"
 
 board_name = env["BOARD"]
 env.Replace(PROGNAME="mavesp-{}-{}".format(board_name, version_string))
